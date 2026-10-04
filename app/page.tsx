@@ -13,76 +13,18 @@ import type {
   User,
 } from "@supabase/supabase-js";
 
+import Backyard from "@/components/Backyard";
+
 import {
   supabase,
 } from "@/lib/supabase";
 
-
-type Species = {
-  id: string;
-
-  common_name: string;
-
-  emoji: string;
-
-  category: string;
-
-  repeat_harvest: boolean;
-
-  base_xp: number;
-
-  typical_yield: number;
-
-  water_every_days: number;
-
-  harvest_cycle_days: number;
-
-  valid_stages: string[];
-};
-
-
-type Plant = {
-  id: number;
-
-  name: string;
-
-  emoji: string;
-
-  stage: string;
-
-  user_id: string;
-
-  species_id: string | null;
-
-  last_watered: string | null;
-
-  health: string | null;
-
-  next_harvest_at: string | null;
-
-  estimated_yield: number | null;
-
-  total_harvested: number | null;
-
-  xp_value: number | null;
-};
-
-
-type ScanResult = {
-  speciesId: string;
-
-  name: string;
-
-  emoji: string;
-
-  stage: string;
-
-  confidence: number;
-
-  estimatedYield: number;
-
-  daysToHarvest: number;
-};
+import type {
+  HarvestEvent,
+  InventoryItem,
+  Plant,
+  Species,
+} from "@/types/game";
 
 
 export default function Home() {
@@ -115,6 +57,20 @@ export default function Home() {
 
 
   const [
+    inventory,
+    setInventory,
+  ] =
+    useState<InventoryItem[]>([]);
+
+
+  const [
+    harvestEvents,
+    setHarvestEvents,
+  ] =
+    useState<HarvestEvent[]>([]);
+
+
+  const [
     loading,
     setLoading,
   ] =
@@ -122,51 +78,19 @@ export default function Home() {
 
 
   const [
-    showScanner,
-    setShowScanner,
+    selectedPlant,
+    setSelectedPlant,
   ] =
-    useState(false);
-
-
-  const [
-    scanPhoto,
-    setScanPhoto,
-  ] =
-    useState<File | null>(
+    useState<Plant | null>(
       null
     );
 
 
   const [
-    scanResult,
-    setScanResult,
-  ] =
-    useState<ScanResult | null>(
-      null
-    );
-
-
-  const [
-    scanning,
-    setScanning,
+    showAddPlant,
+    setShowAddPlant,
   ] =
     useState(false);
-
-
-  const [
-    showKnownPlant,
-    setShowKnownPlant,
-  ] =
-    useState(false);
-
-
-  const [
-    selectedSpecies,
-    setSelectedSpecies,
-  ] =
-    useState<Species | null>(
-      null
-    );
 
 
   useEffect(() => {
@@ -178,7 +102,9 @@ export default function Home() {
 
   async function initialiseApp() {
 
-    setLoading(true);
+    setLoading(
+      true
+    );
 
 
     const {
@@ -216,10 +142,20 @@ export default function Home() {
         user.id
       ),
 
+      loadInventory(
+        user.id
+      ),
+
+      loadHarvestEvents(
+        user.id
+      ),
+
     ]);
 
 
-    setLoading(false);
+    setLoading(
+      false
+    );
 
   }
 
@@ -301,579 +237,121 @@ export default function Home() {
   }
 
 
+  async function loadInventory(
+    userId: string
+  ) {
+
+    const {
+      data,
+      error,
+    } =
+      await supabase
+        .from(
+          "inventory"
+        )
+        .select("*")
+        .eq(
+          "user_id",
+          userId
+        )
+        .order(
+          "species_id"
+        );
+
+
+    if (error) {
+
+      console.error(
+        "Inventory error:",
+        error
+      );
+
+      return;
+    }
+
+
+    setInventory(
+      data || []
+    );
+
+  }
+
+
+  async function loadHarvestEvents(
+    userId: string
+  ) {
+
+    const {
+      data,
+      error,
+    } =
+      await supabase
+        .from(
+          "harvest_events"
+        )
+        .select("*")
+        .eq(
+          "user_id",
+          userId
+        )
+        .order(
+          "created_at",
+          {
+            ascending: false,
+          }
+        );
+
+
+    if (error) {
+
+      console.error(
+        "Harvest events error:",
+        error
+      );
+
+      return;
+    }
+
+
+    setHarvestEvents(
+      data || []
+    );
+
+  }
+
+
   function getSpecies(
     plant: Plant
   ) {
 
     return species.find(
+
       (item) =>
         item.id ===
         plant.species_id
+
     );
 
   }
 
 
-  async function scanPlant() {
-
-    if (!scanPhoto) {
-      return;
-    }
-
-
-    setScanning(
-      true
-    );
-
-
-    setScanResult(
-      null
-    );
-
-
-    /*
-      FAKE AI FOR NOW.
-
-      Later this sends the temporary
-      image to our real vision endpoint.
-    */
-
-
-    await new Promise(
-      (resolve) =>
-        setTimeout(
-          resolve,
-          1200
-        )
-    );
-
-
-    const tomato =
-      species.find(
-        (item) =>
-          item.id ===
-          "tomato"
-      );
-
-
-    if (!tomato) {
-
-      alert(
-        "Tomato species data missing."
-      );
-
-      setScanning(
-        false
-      );
-
-      return;
-    }
-
-
-    setScanResult({
-
-      speciesId:
-        tomato.id,
-
-      name:
-        tomato.common_name,
-
-      emoji:
-        tomato.emoji,
-
-      stage:
-        "Growing",
-
-      confidence:
-        94,
-
-      estimatedYield:
-        tomato.typical_yield,
-
-      daysToHarvest:
-        1,
-
-    });
-
-
-    setScanning(
-      false
-    );
-
-  }
-
-
-  async function confirmScannedPlant() {
-
-    if (
-      !user ||
-      !scanResult
-    ) {
-      return;
-    }
-
-
-    const harvestDate =
-      new Date();
-
-
-    harvestDate.setDate(
-
-      harvestDate.getDate() +
-
-      scanResult.daysToHarvest
-
-    );
-
-
-    const speciesInfo =
-      species.find(
-
-        (item) =>
-          item.id ===
-          scanResult.speciesId
-
-      );
-
-
-    const {
-      data,
-      error,
-    } =
-      await supabase
-        .from(
-          "plants"
-        )
-        .insert({
-
-          name:
-            scanResult.name,
-
-          emoji:
-            scanResult.emoji,
-
-          stage:
-            scanResult.stage,
-
-          species_id:
-            scanResult.speciesId,
-
-          user_id:
-            user.id,
-
-          last_watered:
-            new Date().toISOString(),
-
-          health:
-            "Healthy",
-
-          next_harvest_at:
-            harvestDate.toISOString(),
-
-          estimated_yield:
-            scanResult.estimatedYield,
-
-          total_harvested:
-            0,
-
-          xp_value:
-            speciesInfo?.base_xp ??
-            10,
-
-        })
-        .select();
-
-
-    if (error) {
-
-      console.error(
-        error
-      );
-
-      alert(
-        "Could not add plant."
-      );
-
-      return;
-    }
-
-
-    if (data) {
-
-      setPlants(
-        (current) => [
-          ...current,
-          ...data,
-        ]
-      );
-
-    }
-
-
-    closeScanner();
-
-  }
-
-
-  async function addKnownSeedling(
-    plantSpecies: Species
+  function getSpeciesById(
+    speciesId: string
   ) {
 
-    if (!user) {
-      return;
-    }
+    return species.find(
 
+      (item) =>
+        item.id ===
+        speciesId
 
-    /*
-      Early seedlings are difficult
-      for AI to identify reliably.
-
-      User tells us what they planted,
-      and the AI can later estimate
-      age/health from photos.
-    */
-
-
-    const harvestDate =
-      new Date();
-
-
-    harvestDate.setDate(
-
-      harvestDate.getDate() +
-
-      plantSpecies.harvest_cycle_days
-
-    );
-
-
-    const firstStage =
-      plantSpecies
-        .valid_stages[0] ??
-      "Seedling";
-
-
-    const {
-      data,
-      error,
-    } =
-      await supabase
-        .from(
-          "plants"
-        )
-        .insert({
-
-          name:
-            plantSpecies.common_name,
-
-          emoji:
-            plantSpecies.emoji,
-
-          stage:
-            firstStage,
-
-          species_id:
-            plantSpecies.id,
-
-          user_id:
-            user.id,
-
-          last_watered:
-            new Date().toISOString(),
-
-          health:
-            "Healthy",
-
-          next_harvest_at:
-            harvestDate.toISOString(),
-
-          estimated_yield:
-            plantSpecies.typical_yield,
-
-          total_harvested:
-            0,
-
-          xp_value:
-            plantSpecies.base_xp,
-
-        })
-        .select();
-
-
-    if (error) {
-
-      console.error(
-        error
-      );
-
-      alert(
-        "Could not add seedling."
-      );
-
-      return;
-    }
-
-
-    if (data) {
-
-      setPlants(
-        (current) => [
-          ...current,
-          ...data,
-        ]
-      );
-
-    }
-
-
-    closeScanner();
-
-  }
-
-
-  async function waterPlant(
-    plant: Plant
-  ) {
-
-    if (!user) {
-      return;
-    }
-
-
-    const now =
-      new Date().toISOString();
-
-
-    const {
-      data,
-      error,
-    } =
-      await supabase
-        .from(
-          "plants"
-        )
-        .update({
-
-          last_watered:
-            now,
-
-          health:
-            "Healthy",
-
-        })
-        .eq(
-          "id",
-          plant.id
-        )
-        .eq(
-          "user_id",
-          user.id
-        )
-        .select();
-
-
-    if (error) {
-
-      console.error(
-        error
-      );
-
-      alert(
-        "Could not water plant."
-      );
-
-      return;
-    }
-
-
-    if (data?.[0]) {
-
-      updatePlantLocally(
-        data[0]
-      );
-
-    }
-
-  }
-
-
-  async function harvestPlant(
-    plant: Plant
-  ) {
-
-    if (!user) {
-      return;
-    }
-
-
-    if (
-      !isReadyToHarvest(
-        plant
-      )
-    ) {
-      return;
-    }
-
-
-    const plantSpecies =
-      getSpecies(
-        plant
-      );
-
-
-    const yieldAmount =
-      plant.estimated_yield ??
-      plantSpecies?.typical_yield ??
-      1;
-
-
-    /*
-      Repeat producers like tomatoes
-      create another harvest cycle.
-
-      One-time crops like carrots
-      become harvested.
-    */
-
-
-    if (
-      plantSpecies?.repeat_harvest
-    ) {
-
-      const nextHarvest =
-        new Date();
-
-
-      nextHarvest.setDate(
-
-        nextHarvest.getDate() +
-
-        plantSpecies
-          .harvest_cycle_days
-
-      );
-
-
-      const {
-        data,
-        error,
-      } =
-        await supabase
-          .from(
-            "plants"
-          )
-          .update({
-
-            total_harvested:
-
-              (plant.total_harvested ??
-                0) +
-
-              yieldAmount,
-
-            stage:
-              "Growing",
-
-            next_harvest_at:
-              nextHarvest.toISOString(),
-
-          })
-          .eq(
-            "id",
-            plant.id
-          )
-          .eq(
-            "user_id",
-            user.id
-          )
-          .select();
-
-
-      if (error) {
-
-        console.error(
-          error
-        );
-
-        return;
-      }
-
-
-      if (data?.[0]) {
-
-        updatePlantLocally(
-          data[0]
-        );
-
-      }
-
-    } else {
-
-      const {
-        data,
-        error,
-      } =
-        await supabase
-          .from(
-            "plants"
-          )
-          .update({
-
-            total_harvested:
-
-              (plant.total_harvested ??
-                0) +
-
-              yieldAmount,
-
-            stage:
-              "Harvested",
-
-            next_harvest_at:
-              null,
-
-          })
-          .eq(
-            "id",
-            plant.id
-          )
-          .eq(
-            "user_id",
-            user.id
-          )
-          .select();
-
-
-      if (error) {
-
-        console.error(
-          error
-        );
-
-        return;
-      }
-
-
-      if (data?.[0]) {
-
-        updatePlantLocally(
-          data[0]
-        );
-
-      }
-
-    }
-
-
-    alert(
-      `🎉 Harvested ${yieldAmount} from ${plant.name}!`
     );
 
   }
 
 
   function updatePlantLocally(
-    updated: Plant
+    updatedPlant: Plant
   ) {
 
     setPlants(
@@ -881,81 +359,17 @@ export default function Home() {
         current.map(
           (plant) =>
             plant.id ===
-            updated.id
+            updatedPlant.id
 
-              ? updated
+              ? updatedPlant
 
               : plant
         )
     );
 
-  }
 
-
-  function isReadyToHarvest(
-    plant: Plant
-  ) {
-
-    if (
-      !plant.next_harvest_at
-    ) {
-      return false;
-    }
-
-
-    return (
-
-      Date.now() >=
-
-      new Date(
-        plant.next_harvest_at
-      ).getTime()
-
-    );
-
-  }
-
-
-  function daysUntilHarvest(
-    plant: Plant
-  ) {
-
-    if (
-      !plant.next_harvest_at
-    ) {
-      return null;
-    }
-
-
-    const difference =
-
-      new Date(
-        plant.next_harvest_at
-      ).getTime()
-
-      -
-
-      Date.now();
-
-
-    if (
-      difference <= 0
-    ) {
-      return 0;
-    }
-
-
-    return Math.ceil(
-
-      difference /
-
-      (
-        1000 *
-        60 *
-        60 *
-        24
-      )
-
+    setSelectedPlant(
+      updatedPlant
     );
 
   }
@@ -968,7 +382,9 @@ export default function Home() {
     if (
       !plant.last_watered
     ) {
+
       return 999;
+
     }
 
 
@@ -1008,13 +424,18 @@ export default function Home() {
       );
 
 
-    const wateringInterval =
+    const interval =
+
       plantSpecies
-        ?.water_every_days ??
+        ?.water_every_days
+
+      ??
+
       1;
 
 
     const days =
+
       daysSinceWatered(
         plant
       );
@@ -1022,7 +443,7 @@ export default function Home() {
 
     if (
       days >=
-      wateringInterval + 3
+      interval + 3
     ) {
 
       return "Dead";
@@ -1032,7 +453,7 @@ export default function Home() {
 
     if (
       days >
-      wateringInterval
+      interval
     ) {
 
       return "Thirsty";
@@ -1045,8 +466,792 @@ export default function Home() {
   }
 
 
-  async function deletePlant(
-    id: number
+  function isReadyToHarvest(
+    plant: Plant
+  ) {
+
+    if (
+      !plant.next_harvest_at
+    ) {
+
+      return false;
+
+    }
+
+
+    return (
+
+      Date.now()
+
+      >=
+
+      new Date(
+        plant.next_harvest_at
+      ).getTime()
+
+    );
+
+  }
+
+
+  function daysUntilHarvest(
+    plant: Plant
+  ) {
+
+    if (
+      !plant.next_harvest_at
+    ) {
+
+      return null;
+
+    }
+
+
+    const difference =
+
+      new Date(
+        plant.next_harvest_at
+      ).getTime()
+
+      -
+
+      Date.now();
+
+
+    if (
+      difference <= 0
+    ) {
+
+      return 0;
+
+    }
+
+
+    return Math.ceil(
+
+      difference
+
+      /
+
+      (
+        1000 *
+        60 *
+        60 *
+        24
+      )
+
+    );
+
+  }
+
+
+  function wateredToday(
+    plant: Plant
+  ) {
+
+    if (
+      !plant.last_watered
+    ) {
+
+      return false;
+
+    }
+
+
+    return (
+
+      new Date(
+        plant.last_watered
+      ).toDateString()
+
+      ===
+
+      new Date()
+        .toDateString()
+
+    );
+
+  }
+
+
+  async function waterPlant(
+    plant: Plant
+  ) {
+
+    if (!user) {
+      return;
+    }
+
+
+    if (
+      wateredToday(
+        plant
+      )
+    ) {
+
+      return;
+    }
+
+
+    const {
+      data,
+      error,
+    } =
+      await supabase
+        .from(
+          "plants"
+        )
+        .update({
+
+          last_watered:
+            new Date()
+              .toISOString(),
+
+          health:
+            "Healthy",
+
+        })
+        .eq(
+          "id",
+          plant.id
+        )
+        .eq(
+          "user_id",
+          user.id
+        )
+        .select();
+
+
+    if (error) {
+
+      console.error(
+        "Water error:",
+        error
+      );
+
+      alert(
+        "Could not water plant."
+      );
+
+      return;
+    }
+
+
+    if (
+      data?.[0]
+    ) {
+
+      updatePlantLocally(
+        data[0]
+      );
+
+    }
+
+  }
+
+
+  async function addToInventory(
+    speciesId: string,
+    quantity: number
+  ) {
+
+    if (!user) {
+      return false;
+    }
+
+
+    const existing =
+      inventory.find(
+
+        (item) =>
+          item.species_id ===
+          speciesId
+
+      );
+
+
+    if (existing) {
+
+      const {
+        data,
+        error,
+      } =
+        await supabase
+          .from(
+            "inventory"
+          )
+          .update({
+
+            quantity:
+
+              existing.quantity
+
+              +
+
+              quantity,
+
+            updated_at:
+              new Date()
+                .toISOString(),
+
+          })
+          .eq(
+            "id",
+            existing.id
+          )
+          .eq(
+            "user_id",
+            user.id
+          )
+          .select();
+
+
+      if (error) {
+
+        console.error(
+          error
+        );
+
+        return false;
+      }
+
+
+      if (
+        data?.[0]
+      ) {
+
+        setInventory(
+          (current) =>
+            current.map(
+              (item) =>
+                item.id ===
+                existing.id
+
+                  ? data[0]
+
+                  : item
+            )
+        );
+
+      }
+
+
+      return true;
+
+    }
+
+
+    const {
+      data,
+      error,
+    } =
+      await supabase
+        .from(
+          "inventory"
+        )
+        .insert({
+
+          user_id:
+            user.id,
+
+          species_id:
+            speciesId,
+
+          quantity,
+
+        })
+        .select();
+
+
+    if (error) {
+
+      console.error(
+        error
+      );
+
+      return false;
+    }
+
+
+    if (
+      data?.[0]
+    ) {
+
+      setInventory(
+        (current) => [
+          ...current,
+          data[0],
+        ]
+      );
+
+    }
+
+
+    return true;
+
+  }
+
+
+  async function recordHarvest(
+    plant: Plant,
+    quantity: number,
+    xpEarned: number
+  ) {
+
+    if (!user) {
+      return false;
+    }
+
+
+    const {
+      data,
+      error,
+    } =
+      await supabase
+        .from(
+          "harvest_events"
+        )
+        .insert({
+
+          user_id:
+            user.id,
+
+          plant_id:
+            plant.id,
+
+          species_id:
+            plant.species_id,
+
+          quantity,
+
+          xp_earned:
+            xpEarned,
+
+        })
+        .select();
+
+
+    if (error) {
+
+      console.error(
+        error
+      );
+
+      return false;
+    }
+
+
+    if (
+      data?.[0]
+    ) {
+
+      setHarvestEvents(
+        (current) => [
+          data[0],
+          ...current,
+        ]
+      );
+
+    }
+
+
+    return true;
+
+  }
+
+
+  async function harvestPlant(
+    plant: Plant
+  ) {
+
+    if (
+      !user ||
+      !plant.species_id
+    ) {
+
+      return;
+
+    }
+
+
+    if (
+      !isReadyToHarvest(
+        plant
+      )
+    ) {
+
+      return;
+
+    }
+
+
+    const plantSpecies =
+      getSpecies(
+        plant
+      );
+
+
+    if (!plantSpecies) {
+
+      alert(
+        "Species rules missing."
+      );
+
+      return;
+
+    }
+
+
+    const yieldAmount =
+
+      plant.estimated_yield
+
+      ??
+
+      plantSpecies
+        .typical_yield
+
+      ??
+
+      1;
+
+
+    const xpEarned =
+
+      yieldAmount
+
+      *
+
+      plantSpecies
+        .base_xp;
+
+
+    const inventoryWorked =
+      await addToInventory(
+
+        plant.species_id,
+
+        yieldAmount
+
+      );
+
+
+    if (!inventoryWorked) {
+
+      alert(
+        "Could not update inventory."
+      );
+
+      return;
+
+    }
+
+
+    const eventWorked =
+      await recordHarvest(
+
+        plant,
+
+        yieldAmount,
+
+        xpEarned
+
+      );
+
+
+    if (!eventWorked) {
+
+      alert(
+        "Could not record harvest."
+      );
+
+      return;
+
+    }
+
+
+    if (
+      plantSpecies
+        .repeat_harvest
+    ) {
+
+      const nextHarvest =
+        new Date();
+
+
+      nextHarvest.setDate(
+
+        nextHarvest.getDate()
+
+        +
+
+        plantSpecies
+          .harvest_cycle_days
+
+      );
+
+
+      const {
+        data,
+        error,
+      } =
+        await supabase
+          .from(
+            "plants"
+          )
+          .update({
+
+            stage:
+              "Growing",
+
+            total_harvested:
+
+              (
+                plant.total_harvested
+                ??
+                0
+              )
+
+              +
+
+              yieldAmount,
+
+            next_harvest_at:
+              nextHarvest
+                .toISOString(),
+
+          })
+          .eq(
+            "id",
+            plant.id
+          )
+          .eq(
+            "user_id",
+            user.id
+          )
+          .select();
+
+
+      if (error) {
+
+        console.error(
+          error
+        );
+
+        return;
+
+      }
+
+
+      if (
+        data?.[0]
+      ) {
+
+        updatePlantLocally(
+          data[0]
+        );
+
+      }
+
+    } else {
+
+      const {
+        data,
+        error,
+      } =
+        await supabase
+          .from(
+            "plants"
+          )
+          .update({
+
+            stage:
+              "Harvested",
+
+            total_harvested:
+
+              (
+                plant.total_harvested
+                ??
+                0
+              )
+
+              +
+
+              yieldAmount,
+
+            next_harvest_at:
+              null,
+
+          })
+          .eq(
+            "id",
+            plant.id
+          )
+          .eq(
+            "user_id",
+            user.id
+          )
+          .select();
+
+
+      if (error) {
+
+        console.error(
+          error
+        );
+
+        return;
+
+      }
+
+
+      if (
+        data?.[0]
+      ) {
+
+        updatePlantLocally(
+          data[0]
+        );
+
+      }
+
+    }
+
+
+    alert(
+      `🧺 +${yieldAmount} ${plant.name} • +${xpEarned} XP`
+    );
+
+  }
+
+
+  async function addKnownPlant(
+    plantSpecies: Species
+  ) {
+
+    if (!user) {
+      return;
+    }
+
+
+    const harvestDate =
+      new Date();
+
+
+    harvestDate.setDate(
+
+      harvestDate.getDate()
+
+      +
+
+      plantSpecies
+        .harvest_cycle_days
+
+    );
+
+
+    const firstStage =
+
+      plantSpecies
+        .valid_stages[0]
+
+      ??
+
+      "Seedling";
+
+
+    const {
+      data,
+      error,
+    } =
+      await supabase
+        .from(
+          "plants"
+        )
+        .insert({
+
+          name:
+            plantSpecies
+              .common_name,
+
+          emoji:
+            plantSpecies
+              .emoji,
+
+          stage:
+            firstStage,
+
+          species_id:
+            plantSpecies.id,
+
+          user_id:
+            user.id,
+
+          last_watered:
+            new Date()
+              .toISOString(),
+
+          health:
+            "Healthy",
+
+          next_harvest_at:
+            harvestDate
+              .toISOString(),
+
+          estimated_yield:
+            plantSpecies
+              .typical_yield,
+
+          total_harvested:
+            0,
+
+          xp_value:
+            plantSpecies
+              .base_xp,
+
+        })
+        .select();
+
+
+    if (error) {
+
+      console.error(
+        error
+      );
+
+      alert(
+        "Could not add plant."
+      );
+
+      return;
+
+    }
+
+
+    if (
+      data?.[0]
+    ) {
+
+      setPlants(
+        (current) => [
+          ...current,
+          data[0],
+        ]
+      );
+
+    }
+
+
+    setShowAddPlant(
+      false
+    );
+
+  }
+
+
+  async function removePlant(
+    plant: Plant
   ) {
 
     if (!user) {
@@ -1056,7 +1261,7 @@ export default function Home() {
 
     const confirmed =
       window.confirm(
-        "Remove this plant from your garden?"
+        `Remove ${plant.name} from your backyard?`
       );
 
 
@@ -1075,7 +1280,7 @@ export default function Home() {
         .delete()
         .eq(
           "id",
-          id
+          plant.id
         )
         .eq(
           "user_id",
@@ -1090,39 +1295,21 @@ export default function Home() {
       );
 
       return;
+
     }
 
 
     setPlants(
       (current) =>
         current.filter(
-          (plant) =>
-            plant.id !== id
+          (item) =>
+            item.id !==
+            plant.id
         )
     );
 
-  }
 
-
-  function closeScanner() {
-
-    setShowScanner(
-      false
-    );
-
-    setScanPhoto(
-      null
-    );
-
-    setScanResult(
-      null
-    );
-
-    setShowKnownPlant(
-      false
-    );
-
-    setSelectedSpecies(
+    setSelectedPlant(
       null
     );
 
@@ -1141,41 +1328,17 @@ export default function Home() {
   }
 
 
-  const totalHarvested =
-    plants.reduce(
-
-      (total, plant) =>
-
-        total +
-
-        (
-          plant.total_harvested ??
-          0
-        ),
-
-      0
-
-    );
-
-
   const totalXP =
-    plants.reduce(
 
-      (total, plant) =>
+    harvestEvents.reduce(
 
-        total +
+      (total, event) =>
 
-        (
-          plant.total_harvested ??
-          0
-        )
+        total
 
-        *
+        +
 
-        (
-          plant.xp_value ??
-          10
-        ),
+        event.xp_earned,
 
       0
 
@@ -1193,20 +1356,37 @@ export default function Home() {
     1;
 
 
+  const totalHarvested =
+
+    harvestEvents.reduce(
+
+      (total, event) =>
+
+        total
+
+        +
+
+        event.quantity,
+
+      0
+
+    );
+
+
   if (loading) {
 
     return (
 
-      <main className="flex min-h-screen items-center justify-center bg-[#f4f7ee]">
+      <main className="flex min-h-screen items-center justify-center bg-green-100">
 
         <div className="text-center">
 
-          <div className="text-6xl">
+          <div className="text-7xl">
             🌱
           </div>
 
-          <p className="mt-4 font-semibold">
-            Loading your garden...
+          <p className="mt-4 font-bold">
+            Entering your backyard...
           </p>
 
         </div>
@@ -1220,36 +1400,82 @@ export default function Home() {
 
   return (
 
-    <main className="min-h-screen bg-[#f4f7ee] text-[#203020]">
-
-      <section className="mx-auto max-w-6xl px-6 py-10">
+    <main className="min-h-screen bg-[#e9f2df] text-[#203020]">
 
 
-        <header className="flex items-start justify-between gap-6">
+      {/* GAME HUD */}
+
+      <header className="sticky top-0 z-40 border-b border-green-900/10 bg-white/95 shadow-sm backdrop-blur">
+
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
 
 
           <div>
 
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-green-700">
-              Your digital garden
+            <p className="text-xs font-bold uppercase tracking-widest text-green-700">
+              Backyard
             </p>
 
-            <h1 className="mt-2 text-4xl font-bold">
-              My Backyard
+            <h1 className="text-xl font-black">
+              🌿 My Garden
             </h1>
 
-            <p className="mt-3 text-gray-600">
-              Grow. Water. Harvest. Level up.
+          </div>
+
+
+          <div className="flex items-center gap-2 text-sm">
+
+
+            <div className="rounded-xl bg-yellow-100 px-3 py-2 font-bold">
+              ⭐ {totalXP} XP
+            </div>
+
+
+            <div className="rounded-xl bg-green-100 px-3 py-2 font-bold">
+              LVL {gardenLevel}
+            </div>
+
+
+          </div>
+
+
+        </div>
+
+      </header>
+
+
+      <div className="mx-auto max-w-6xl px-4 py-6">
+
+
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+
+
+          <div>
+
+            <p className="font-bold">
+              Welcome home 👋
             </p>
 
-            <p className="mt-2 text-sm text-gray-500">
+            <p className="text-xs text-gray-500">
               {user?.email}
             </p>
 
           </div>
 
 
-          <div className="flex gap-3">
+          <div className="flex gap-2">
+
+
+            <button
+              onClick={() =>
+                setShowAddPlant(
+                  true
+                )
+              }
+              className="rounded-xl bg-green-700 px-4 py-3 font-bold text-white shadow"
+            >
+              🌱 Add Plant
+            </button>
 
 
             <button
@@ -1262,200 +1488,100 @@ export default function Home() {
             </button>
 
 
-            <button
-              onClick={() =>
-                setShowScanner(
-                  true
-                )
-              }
-              className="rounded-xl bg-green-700 px-5 py-3 font-semibold text-white"
-            >
-              📷 Add Plant
-            </button>
-
-
           </div>
 
 
-        </header>
+        </div>
 
 
-        <section className="mt-10 grid gap-6 md:grid-cols-4">
+        <Backyard
+
+          plants={
+            plants
+          }
+
+          selectedPlantId={
+            selectedPlant?.id
+            ??
+            null
+          }
+
+          getHealth={
+            getPlantHealth
+          }
+
+          isReady={
+            isReadyToHarvest
+          }
+
+          onSelectPlant={
+            setSelectedPlant
+          }
+
+        />
 
 
-          <StatCard
-            title="Plants"
-            value={
-              plants.length
-            }
-          />
+        {/* SELECTED PLANT ACTION PANEL */}
+
+        {selectedPlant && (
+
+          <section className="mt-5 rounded-3xl bg-white p-5 shadow">
 
 
-          <StatCard
-            title="Garden level"
-            value={
-              gardenLevel
-            }
-          />
+            <div className="flex items-start justify-between">
 
 
-          <StatCard
-            title="XP"
-            value={
-              totalXP
-            }
-          />
+              <div className="flex items-center gap-4">
 
 
-          <StatCard
-            title="Harvested"
-            value={
-              totalHarvested
-            }
-          />
+                <div className="text-6xl">
+
+                  {getPlantHealth(
+                    selectedPlant
+                  ) === "Dead"
+
+                    ? "🥀"
+
+                    : selectedPlant
+                        .emoji}
+
+                </div>
 
 
-        </section>
+                <div>
 
-
-        <section className="mt-10">
-
-
-          <h2 className="text-2xl font-bold">
-            Your Garden
-          </h2>
-
-
-          {plants.length ===
-          0 ? (
-
-
-            <div className="mt-4 rounded-3xl bg-green-100 p-16 text-center">
-
-
-              <div className="text-7xl">
-                🌱
-              </div>
-
-
-              <h3 className="mt-4 text-2xl font-bold">
-                Your garden is empty
-              </h3>
-
-
-              <p className="mt-2 text-gray-600">
-                Add your first real plant.
-              </p>
-
-
-            </div>
-
-
-          ) : (
-
-
-            <div className="mt-4 grid gap-6 md:grid-cols-3">
-
-
-              {plants.map(
-                (plant) => (
-
-
-                  <PlantCard
-
-                    key={
-                      plant.id
+                  <h2 className="text-2xl font-black">
+                    {
+                      selectedPlant.name
                     }
+                  </h2>
 
-                    plant={
-                      plant
+                  <p className="text-sm text-gray-500">
+                    {
+                      selectedPlant.stage
                     }
+                  </p>
 
-                    health={
+                  <p className="mt-1 text-sm font-semibold text-green-700">
+                    {
                       getPlantHealth(
-                        plant
+                        selectedPlant
                       )
                     }
+                  </p>
 
-                    ready={
-                      isReadyToHarvest(
-                        plant
-                      )
-                    }
+                </div>
 
-                    daysLeft={
-                      daysUntilHarvest(
-                        plant
-                      )
-                    }
-
-                    onWater={() =>
-                      waterPlant(
-                        plant
-                      )
-                    }
-
-                    onHarvest={() =>
-                      harvestPlant(
-                        plant
-                      )
-                    }
-
-                    onDelete={() =>
-                      deletePlant(
-                        plant.id
-                      )
-                    }
-
-                  />
-
-
-                )
-              )}
-
-
-            </div>
-
-
-          )}
-
-
-        </section>
-
-
-      </section>
-
-
-      {showScanner && (
-
-
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-6">
-
-
-          <div className="my-10 w-full max-w-lg rounded-3xl bg-white p-6 shadow-xl">
-
-
-            <div className="flex items-center justify-between">
-
-
-              <div>
-
-                <h2 className="text-2xl font-bold">
-                  Add Plant
-                </h2>
-
-                <p className="mt-1 text-sm text-gray-500">
-                  Scan a plant or tell us what you planted.
-                </p>
 
               </div>
 
 
               <button
-                onClick={
-                  closeScanner
+                onClick={() =>
+                  setSelectedPlant(
+                    null
+                  )
                 }
-                className="text-xl"
               >
                 ✕
               </button>
@@ -1464,228 +1590,69 @@ export default function Home() {
             </div>
 
 
-            <button
-              onClick={() => {
-
-                setShowKnownPlant(
-                  false
-                );
-
-              }}
-              className="mt-6 w-full rounded-2xl border border-green-300 bg-green-50 p-5 text-left"
-            >
-
-              <div className="text-3xl">
-                📷
-              </div>
-
-              <h3 className="mt-2 font-bold">
-                Identify my plant
-              </h3>
-
-              <p className="mt-1 text-sm text-gray-500">
-                Best for established plants.
-              </p>
-
-            </button>
+            {getPlantHealth(
+              selectedPlant
+            ) !== "Dead" && (
 
 
-            <button
-              onClick={() => {
-
-                setShowKnownPlant(
-                  true
-                );
-
-                setScanPhoto(
-                  null
-                );
-
-                setScanResult(
-                  null
-                );
-
-              }}
-              className="mt-3 w-full rounded-2xl border border-green-300 bg-green-50 p-5 text-left"
-            >
-
-              <div className="text-3xl">
-                🌱
-              </div>
-
-              <h3 className="mt-2 font-bold">
-                I know what I planted
-              </h3>
-
-              <p className="mt-1 text-sm text-gray-500">
-                Best for seeds and young seedlings.
-              </p>
-
-            </button>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
 
 
-            {!showKnownPlant && (
+                <button
+                  onClick={() =>
+                    waterPlant(
+                      selectedPlant
+                    )
+                  }
+                  disabled={
+                    wateredToday(
+                      selectedPlant
+                    )
+                  }
+                  className="rounded-xl bg-blue-100 px-4 py-4 font-bold text-blue-800 disabled:bg-green-100 disabled:text-green-700"
+                >
+
+                  {wateredToday(
+                    selectedPlant
+                  )
+
+                    ? "✓ Watered today"
+
+                    : "💧 Water"}
+
+                </button>
 
 
-              <div className="mt-6">
+                {isReadyToHarvest(
+                  selectedPlant
+                ) ? (
 
 
-                <input
-
-                  type="file"
-
-                  accept="image/*"
-
-                  capture="environment"
-
-                  onChange={(
-                    event
-                  ) => {
-
-                    const file =
-
-                      event
-                        .target
-                        .files?.[0];
-
-
-                    if (file) {
-
-                      setScanPhoto(
-                        file
-                      );
-
-                      setScanResult(
-                        null
-                      );
-
+                  <button
+                    onClick={() =>
+                      harvestPlant(
+                        selectedPlant
+                      )
                     }
-
-                  }}
-
-                  className="w-full"
-
-                />
+                    className="rounded-xl bg-orange-500 px-4 py-4 font-black text-white"
+                  >
+                    🧺 Harvest
+                  </button>
 
 
-                {scanPhoto &&
-                  !scanResult && (
+                ) : (
 
 
-                    <button
+                  <div className="flex items-center justify-center rounded-xl bg-gray-100 px-4 py-4 text-sm font-semibold">
 
-                      onClick={
-                        scanPlant
-                      }
+                    ⏳{" "}
 
-                      disabled={
-                        scanning
-                      }
+                    {daysUntilHarvest(
+                      selectedPlant
+                    ) ??
+                      "?"}
 
-                      className="mt-5 w-full rounded-xl bg-green-700 px-4 py-3 font-semibold text-white"
-
-                    >
-
-                      {scanning
-
-                        ? "AI is scanning..."
-
-                        : "Identify Plant"}
-
-                    </button>
-
-
-                  )}
-
-
-                {scanResult && (
-
-
-                  <div className="mt-6 rounded-2xl bg-green-50 p-5">
-
-
-                    <div className="text-6xl">
-
-                      {
-                        scanResult.emoji
-                      }
-
-                    </div>
-
-
-                    <h3 className="mt-3 text-2xl font-bold">
-
-                      {
-                        scanResult.name
-                      }
-
-                    </h3>
-
-
-                    <p className="mt-2">
-
-                      Stage:{" "}
-
-                      <b>
-                        {
-                          scanResult.stage
-                        }
-                      </b>
-
-                    </p>
-
-
-                    <p>
-
-                      Confidence:{" "}
-
-                      {
-                        scanResult.confidence
-                      }
-
-                      %
-
-                    </p>
-
-
-                    <p>
-
-                      Estimated yield:{" "}
-
-                      {
-                        scanResult.estimatedYield
-                      }
-
-                    </p>
-
-
-                    <p>
-
-                      Estimated harvest:{" "}
-
-                      {
-                        scanResult.daysToHarvest
-                      }
-
-                      {" "}day(s)
-
-                    </p>
-
-
-                    <button
-
-                      onClick={
-                        confirmScannedPlant
-                      }
-
-                      className="mt-5 w-full rounded-xl bg-green-700 px-4 py-3 font-semibold text-white"
-
-                    >
-
-                      Add to Garden
-
-                    </button>
-
+                    {" "}day(s)
 
                   </div>
 
@@ -1699,105 +1666,298 @@ export default function Home() {
             )}
 
 
-            {showKnownPlant && (
+            <button
+              onClick={() =>
+                removePlant(
+                  selectedPlant
+                )
+              }
+              className="mt-4 text-xs font-semibold text-red-500"
+            >
+              Remove plant
+            </button>
 
 
-              <div className="mt-6">
+          </section>
+
+        )}
 
 
-                <h3 className="font-bold">
-                  What did you plant?
-                </h3>
+        {/* INVENTORY */}
+
+        <section className="mt-7">
 
 
-                <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="flex items-end justify-between">
 
 
-                  {species.map(
-                    (
-                      plantSpecies
-                    ) => (
+            <div>
+
+              <p className="text-xs font-bold uppercase tracking-widest text-green-700">
+                Inventory
+              </p>
+
+              <h2 className="text-2xl font-black">
+                🧺 Harvest Basket
+              </h2>
+
+            </div>
 
 
-                      <button
+            <p className="text-sm font-semibold text-gray-500">
+              {totalHarvested} harvested
+            </p>
 
-                        key={
-                          plantSpecies.id
+
+          </div>
+
+
+          {inventory.length ===
+          0 ? (
+
+
+            <div className="mt-3 rounded-3xl border-2 border-dashed border-green-300 bg-white/70 p-8 text-center">
+
+              <div className="text-5xl">
+                🧺
+              </div>
+
+              <p className="mt-2 font-semibold">
+                Basket empty
+              </p>
+
+            </div>
+
+
+          ) : (
+
+
+            <div className="mt-3 flex gap-3 overflow-x-auto pb-2">
+
+
+              {inventory.map(
+                (item) => {
+
+
+                  const itemSpecies =
+                    getSpeciesById(
+                      item.species_id
+                    );
+
+
+                  return (
+
+                    <div
+                      key={
+                        item.id
+                      }
+                      className="min-w-[130px] rounded-2xl bg-white p-4 text-center shadow"
+                    >
+
+                      <div className="text-4xl">
+
+                        {
+                          itemSpecies
+                            ?.emoji
+                          ??
+                          "🌱"
                         }
 
-                        onClick={() =>
-                          setSelectedSpecies(
-                            plantSpecies
-                          )
+                      </div>
+
+                      <p className="mt-2 text-sm font-bold">
+
+                        {
+                          itemSpecies
+                            ?.common_name
+                          ??
+                          item.species_id
                         }
 
-                        className={`rounded-2xl border p-4 ${
-                          selectedSpecies
-                            ?.id ===
-                          plantSpecies.id
+                      </p>
 
-                            ? "border-green-700 bg-green-100"
+                      <p className="text-lg font-black text-green-700">
 
-                            : "border-gray-200"
-                        }`}
+                        ×
+                        {
+                          item.quantity
+                        }
 
-                      >
+                      </p>
 
-                        <div className="text-4xl">
-                          {
-                            plantSpecies.emoji
-                          }
-                        </div>
+                    </div>
 
-                        <p className="mt-2 font-semibold">
-                          {
-                            plantSpecies.common_name
-                          }
-                        </p>
+                  );
 
-                      </button>
+                }
+              )}
 
 
-                    )
-                  )}
+            </div>
 
 
-                </div>
+          )}
 
 
-                {selectedSpecies && (
+        </section>
 
 
-                  <button
+        {/* FUTURE GAME NAVIGATION */}
 
-                    onClick={() =>
-                      addKnownSeedling(
-                        selectedSpecies
-                      )
-                    }
-
-                    className="mt-6 w-full rounded-xl bg-green-700 px-4 py-3 font-semibold text-white"
-
-                  >
-
-                    Add{" "}
-
-                    {
-                      selectedSpecies.common_name
-                    }
-
-                    {" "}Seedling
-
-                  </button>
+        <section className="mt-7 grid grid-cols-3 gap-3">
 
 
-                )}
+          <button className="rounded-2xl bg-white p-4 text-center shadow">
 
+            <div className="text-3xl">
+              🏡
+            </div>
+
+            <p className="mt-1 text-xs font-bold">
+              Backyard
+            </p>
+
+          </button>
+
+
+          <button
+            disabled
+            className="rounded-2xl bg-white/60 p-4 text-center opacity-60 shadow"
+          >
+
+            <div className="text-3xl">
+              🏪
+            </div>
+
+            <p className="mt-1 text-xs font-bold">
+              Local Market
+            </p>
+
+          </button>
+
+
+          <button
+            disabled
+            className="rounded-2xl bg-white/60 p-4 text-center opacity-60 shadow"
+          >
+
+            <div className="text-3xl">
+              👤
+            </div>
+
+            <p className="mt-1 text-xs font-bold">
+              Profile
+            </p>
+
+          </button>
+
+
+        </section>
+
+
+      </div>
+
+
+      {/* ADD PLANT MODAL */}
+
+      {showAddPlant && (
+
+
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-5">
+
+
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
+
+
+            <div className="flex items-center justify-between">
+
+
+              <div>
+
+                <h2 className="text-2xl font-black">
+                  Add Plant
+                </h2>
+
+                <p className="text-sm text-gray-500">
+                  Choose what you planted.
+                </p>
 
               </div>
 
 
-            )}
+              <button
+                onClick={() =>
+                  setShowAddPlant(
+                    false
+                  )
+                }
+                className="text-xl"
+              >
+                ✕
+              </button>
+
+
+            </div>
+
+
+            <div className="mt-5 grid grid-cols-2 gap-3">
+
+
+              {species.map(
+                (
+                  plantSpecies
+                ) => (
+
+
+                  <button
+                    key={
+                      plantSpecies.id
+                    }
+                    onClick={() =>
+                      addKnownPlant(
+                        plantSpecies
+                      )
+                    }
+                    className="rounded-2xl border border-green-200 bg-green-50 p-5 transition hover:bg-green-100"
+                  >
+
+                    <div className="text-5xl">
+                      {
+                        plantSpecies.emoji
+                      }
+                    </div>
+
+                    <p className="mt-2 font-bold">
+                      {
+                        plantSpecies.common_name
+                      }
+                    </p>
+
+                    <p className="mt-1 text-xs text-gray-500">
+                      Add seedling
+                    </p>
+
+                  </button>
+
+
+                )
+              )}
+
+
+            </div>
+
+
+            <div className="mt-5 rounded-2xl bg-gray-100 p-4">
+
+              <p className="text-sm font-semibold">
+                📷 AI scanning coming later
+              </p>
+
+              <p className="mt-1 text-xs text-gray-500">
+                We are building the whole game first.
+              </p>
+
+            </div>
 
 
           </div>
@@ -1810,258 +1970,6 @@ export default function Home() {
 
 
     </main>
-
-  );
-
-}
-
-
-function StatCard({
-  title,
-  value,
-}: {
-  title: string;
-  value: number;
-}) {
-
-  return (
-
-    <div className="rounded-3xl bg-white p-6 shadow-sm">
-
-
-      <p className="text-sm text-gray-500">
-        {title}
-      </p>
-
-
-      <p className="mt-2 text-3xl font-bold">
-        {value}
-      </p>
-
-
-    </div>
-
-  );
-
-}
-
-
-function PlantCard({
-  plant,
-  health,
-  ready,
-  daysLeft,
-  onWater,
-  onHarvest,
-  onDelete,
-}: {
-
-  plant: Plant;
-
-  health: string;
-
-  ready: boolean;
-
-  daysLeft:
-    | number
-    | null;
-
-  onWater: () => void;
-
-  onHarvest: () => void;
-
-  onDelete: () => void;
-
-}) {
-
-
-  const wateredToday =
-
-    plant.last_watered
-
-      ? new Date(
-          plant.last_watered
-        ).toDateString()
-
-        ===
-
-        new Date()
-          .toDateString()
-
-      : false;
-
-
-  return (
-
-    <div className="rounded-3xl bg-white p-6 text-center shadow-sm">
-
-
-      <div className="text-6xl">
-
-        {health === "Dead"
-
-          ? "🥀"
-
-          : plant.emoji}
-
-      </div>
-
-
-      <h3 className="mt-4 text-xl font-bold">
-        {plant.name}
-      </h3>
-
-
-      <p className="mt-1 text-sm text-gray-500">
-        {plant.stage}
-      </p>
-
-
-      <div className="mt-4">
-
-
-        {health === "Healthy" && (
-
-          <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">
-            Healthy
-          </span>
-
-        )}
-
-
-        {health === "Thirsty" && (
-
-          <span className="rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold">
-            💧 Thirsty
-          </span>
-
-        )}
-
-
-        {health === "Dead" && (
-
-          <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
-            Dead
-          </span>
-
-        )}
-
-
-      </div>
-
-
-      {health !==
-        "Dead" && (
-
-
-        <>
-
-
-          {ready ? (
-
-
-            <div className="mt-4">
-
-
-              <p className="font-bold text-green-700">
-                ✨ Ready to pick!
-              </p>
-
-
-              <button
-
-                onClick={
-                  onHarvest
-                }
-
-                className="mt-3 w-full rounded-xl bg-orange-500 px-4 py-3 font-bold text-white"
-
-              >
-
-                🧺 Harvest
-
-              </button>
-
-
-            </div>
-
-
-          ) : (
-
-
-            <p className="mt-4 text-sm text-gray-600">
-
-
-              {daysLeft === null
-
-                ? "No harvest scheduled"
-
-                : `⏳ ${daysLeft} day(s) until harvest`}
-
-
-            </p>
-
-
-          )}
-
-
-          <button
-
-            onClick={
-              onWater
-            }
-
-            disabled={
-              wateredToday
-            }
-
-            className="mt-3 w-full rounded-xl bg-blue-100 px-4 py-3 font-semibold text-blue-800 disabled:cursor-not-allowed disabled:bg-green-100 disabled:text-green-700"
-
-          >
-
-            {wateredToday
-
-              ? "✓ Watered today"
-
-              : "💧 Water"}
-
-          </button>
-
-
-        </>
-
-
-      )}
-
-
-      <p className="mt-4 text-xs text-gray-500">
-
-        Total harvested:{" "}
-
-        {
-          plant.total_harvested ??
-          0
-        }
-
-      </p>
-
-
-      <button
-
-        onClick={
-          onDelete
-        }
-
-        className="mt-4 text-xs font-semibold text-red-500"
-
-      >
-
-        Remove plant
-
-      </button>
-
-
-    </div>
 
   );
 
