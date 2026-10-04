@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
 type Plant = {
@@ -8,6 +10,7 @@ type Plant = {
   name: string;
   emoji: string;
   stage: string;
+  user_id: string;
 };
 
 const plantChoices = [
@@ -20,43 +23,78 @@ const plantChoices = [
 ];
 
 export default function Home() {
+  const router = useRouter();
+
+  const [user, setUser] = useState<User | null>(null);
+
   const [showForm, setShowForm] = useState(false);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [plantName, setPlantName] = useState("");
   const [plantEmoji, setPlantEmoji] = useState("🌱");
   const [loading, setLoading] = useState(true);
 
-  const [editingPlant, setEditingPlant] = useState<Plant | null>(null);
+  const [editingPlant, setEditingPlant] =
+    useState<Plant | null>(null);
+
   const [editName, setEditName] = useState("");
   const [editStage, setEditStage] = useState("");
 
   useEffect(() => {
-    loadPlants();
+    initialiseApp();
   }, []);
 
-  async function loadPlants() {
+  async function initialiseApp() {
     setLoading(true);
 
-    const { data, error } = await supabase
-      .from("plants")
-      .select("*")
-      .order("created_at", { ascending: true });
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
 
-    if (error) {
-      console.error("Error loading plants:", error);
-    } else {
-      setPlants(data || []);
+    if (error || !user) {
+      router.push("/login");
+      return;
     }
+
+    setUser(user);
+
+    await loadPlants(user.id);
 
     setLoading(false);
   }
 
-  function choosePlant(name: string, emoji: string) {
+  async function loadPlants(userId: string) {
+    const { data, error } = await supabase
+      .from("plants")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", {
+        ascending: true,
+      });
+
+    if (error) {
+      console.error(
+        "Error loading plants:",
+        error
+      );
+
+      return;
+    }
+
+    setPlants(data || []);
+  }
+
+  function choosePlant(
+    name: string,
+    emoji: string
+  ) {
     setPlantName(name);
     setPlantEmoji(emoji);
   }
 
   async function addPlant() {
+    if (!user) return;
+
     if (!plantName.trim()) return;
 
     const { data, error } = await supabase
@@ -65,12 +103,18 @@ export default function Home() {
         name: plantName,
         emoji: plantEmoji,
         stage: "New",
+        user_id: user.id,
       })
       .select();
 
     if (error) {
-      console.error("Error adding plant:", error);
+      console.error(
+        "Error adding plant:",
+        error
+      );
+
       alert("Could not add plant.");
+
       return;
     }
 
@@ -87,6 +131,8 @@ export default function Home() {
   }
 
   async function deletePlant(id: number) {
+    if (!user) return;
+
     const confirmed = window.confirm(
       "Are you sure you want to delete this plant?"
     );
@@ -96,16 +142,24 @@ export default function Home() {
     const { error } = await supabase
       .from("plants")
       .delete()
-      .eq("id", id);
+      .eq("id", id)
+      .eq("user_id", user.id);
 
     if (error) {
-      console.error("Error deleting plant:", error);
+      console.error(
+        "Error deleting plant:",
+        error
+      );
+
       alert("Could not delete plant.");
+
       return;
     }
 
     setPlants((currentPlants) =>
-      currentPlants.filter((plant) => plant.id !== id)
+      currentPlants.filter(
+        (plant) => plant.id !== id
+      )
     );
   }
 
@@ -116,7 +170,8 @@ export default function Home() {
   }
 
   async function saveEdit() {
-    if (!editingPlant) return;
+    if (!editingPlant || !user) return;
+
     if (!editName.trim()) return;
 
     const { data, error } = await supabase
@@ -126,18 +181,26 @@ export default function Home() {
         stage: editStage,
       })
       .eq("id", editingPlant.id)
+      .eq("user_id", user.id)
       .select();
 
     if (error) {
-      console.error("Error updating plant:", error);
+      console.error(
+        "Error updating plant:",
+        error
+      );
+
       alert("Could not update plant.");
+
       return;
     }
 
     if (data && data[0]) {
       setPlants((currentPlants) =>
         currentPlants.map((plant) =>
-          plant.id === editingPlant.id ? data[0] : plant
+          plant.id === editingPlant.id
+            ? data[0]
+            : plant
         )
       );
     }
@@ -147,10 +210,32 @@ export default function Home() {
     setEditStage("");
   }
 
+  async function signOut() {
+    await supabase.auth.signOut();
+
+    router.push("/login");
+  }
+
+  if (loading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#f4f7ee]">
+        <div className="text-center">
+          <div className="text-5xl">
+            🌱
+          </div>
+
+          <p className="mt-4 font-semibold text-green-900">
+            Loading your backyard...
+          </p>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[#f4f7ee] text-[#203020]">
       <section className="mx-auto max-w-6xl px-6 py-10">
-        <header className="flex items-center justify-between gap-6">
+        <header className="flex items-start justify-between gap-6">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-green-700">
               Your digital garden
@@ -161,17 +246,35 @@ export default function Home() {
             </h1>
 
             <p className="mt-3 max-w-xl text-gray-600">
-              Grow your real garden, build its digital twin, and connect with
-              growers around you.
+              Grow your real garden, build its
+              digital twin, and connect with growers
+              around you.
             </p>
+
+            {user && (
+              <p className="mt-3 text-sm text-gray-500">
+                Signed in as {user.email}
+              </p>
+            )}
           </div>
 
-          <button
-            onClick={() => setShowForm(true)}
-            className="rounded-2xl bg-green-700 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-green-800"
-          >
-            + Add Plant
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={signOut}
+              className="rounded-2xl border border-gray-300 bg-white px-5 py-3 font-semibold text-gray-700 hover:bg-gray-50"
+            >
+              Log out
+            </button>
+
+            <button
+              onClick={() =>
+                setShowForm(true)
+              }
+              className="rounded-2xl bg-green-700 px-5 py-3 font-semibold text-white shadow-sm hover:bg-green-800"
+            >
+              + Add Plant
+            </button>
+          </div>
         </header>
 
         <section className="mt-10 grid gap-6 md:grid-cols-3">
@@ -192,20 +295,14 @@ export default function Home() {
         </section>
 
         <section className="mt-10">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-2xl font-bold">
-              Your Garden
-            </h2>
-          </div>
+          <h2 className="mb-4 text-2xl font-bold">
+            Your Garden
+          </h2>
 
           <div className="relative min-h-[420px] overflow-hidden rounded-[32px] border border-green-200 bg-green-100 p-8 shadow-sm">
             <div className="absolute inset-x-0 bottom-0 h-32 bg-green-200" />
 
-            {loading ? (
-              <p className="relative">
-                Loading garden...
-              </p>
-            ) : plants.length === 0 ? (
+            {plants.length === 0 ? (
               <div className="relative flex min-h-[300px] items-center justify-center">
                 <div className="text-center">
                   <div className="text-6xl">
@@ -217,7 +314,8 @@ export default function Home() {
                   </h3>
 
                   <p className="mt-2 text-gray-600">
-                    Add your first plant to start growing your digital backyard.
+                    Add your first plant to begin
+                    building your backyard.
                   </p>
                 </div>
               </div>
@@ -227,8 +325,12 @@ export default function Home() {
                   <PlantCard
                     key={plant.id}
                     plant={plant}
-                    onEdit={() => startEditing(plant)}
-                    onDelete={() => deletePlant(plant.id)}
+                    onEdit={() =>
+                      startEditing(plant)
+                    }
+                    onDelete={() =>
+                      deletePlant(plant.id)
+                    }
                   />
                 ))}
               </div>
@@ -246,7 +348,9 @@ export default function Home() {
               </h2>
 
               <button
-                onClick={() => setShowForm(false)}
+                onClick={() =>
+                  setShowForm(false)
+                }
                 className="text-xl text-gray-500"
               >
                 ✕
@@ -267,7 +371,7 @@ export default function Home() {
                       plant.emoji
                     )
                   }
-                  className={`rounded-2xl border p-3 text-center transition ${
+                  className={`rounded-2xl border p-3 text-center ${
                     plantName === plant.name
                       ? "border-green-700 bg-green-100"
                       : "border-gray-200 hover:bg-gray-50"
@@ -292,7 +396,9 @@ export default function Home() {
               <input
                 value={plantName}
                 onChange={(event) =>
-                  setPlantName(event.target.value)
+                  setPlantName(
+                    event.target.value
+                  )
                 }
                 placeholder="e.g. Roma Tomato"
                 className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-green-600"
@@ -302,7 +408,7 @@ export default function Home() {
             <button
               onClick={addPlant}
               disabled={!plantName.trim()}
-              className="mt-6 w-full rounded-xl bg-green-700 px-4 py-3 font-semibold text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-6 w-full rounded-xl bg-green-700 px-4 py-3 font-semibold text-white hover:bg-green-800 disabled:opacity-50"
             >
               Add to garden
             </button>
@@ -319,7 +425,9 @@ export default function Home() {
               </h2>
 
               <button
-                onClick={() => setEditingPlant(null)}
+                onClick={() =>
+                  setEditingPlant(null)
+                }
                 className="text-xl text-gray-500"
               >
                 ✕
@@ -334,9 +442,11 @@ export default function Home() {
               <input
                 value={editName}
                 onChange={(event) =>
-                  setEditName(event.target.value)
+                  setEditName(
+                    event.target.value
+                  )
                 }
-                className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-green-600"
+                className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3"
               />
             </div>
 
@@ -348,15 +458,32 @@ export default function Home() {
               <select
                 value={editStage}
                 onChange={(event) =>
-                  setEditStage(event.target.value)
+                  setEditStage(
+                    event.target.value
+                  )
                 }
-                className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-green-600"
+                className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3"
               >
-                <option value="New">New</option>
-                <option value="Seedling">Seedling</option>
-                <option value="Growing">Growing</option>
-                <option value="Flowering">Flowering</option>
-                <option value="Fruiting">Fruiting</option>
+                <option value="New">
+                  New
+                </option>
+
+                <option value="Seedling">
+                  Seedling
+                </option>
+
+                <option value="Growing">
+                  Growing
+                </option>
+
+                <option value="Flowering">
+                  Flowering
+                </option>
+
+                <option value="Fruiting">
+                  Fruiting
+                </option>
+
                 <option value="Ready to harvest">
                   Ready to harvest
                 </option>
@@ -406,7 +533,7 @@ function PlantCard({
   onDelete: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center rounded-3xl bg-white/80 p-6 text-center shadow-sm backdrop-blur">
+    <div className="flex flex-col items-center rounded-3xl bg-white/80 p-6 text-center shadow-sm">
       <div className="text-6xl">
         {plant.emoji}
       </div>
