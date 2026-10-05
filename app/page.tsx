@@ -15,6 +15,8 @@ import type {
 
 import Backyard from "@/components/Backyard";
 
+import MarketPanel from "@/components/MarketPanel";
+
 import ProfilePanel from "@/components/ProfilePanel";
 
 import {
@@ -24,6 +26,7 @@ import {
 import type {
   HarvestEvent,
   InventoryItem,
+  MarketListingWithProfile,
   Plant,
   Profile,
   Species,
@@ -86,6 +89,13 @@ export default function Home() {
     useState<Profile | null>(
       null
     );
+
+
+  const [
+    marketListings,
+    setMarketListings,
+  ] =
+    useState<MarketListingWithProfile[]>([]);
 
 
   const [
@@ -153,6 +163,7 @@ export default function Home() {
       );
 
       return;
+
     }
 
 
@@ -181,6 +192,8 @@ export default function Home() {
       loadHarvestEvents(
         user.id
       ),
+
+      loadMarketListings(),
 
     ]);
 
@@ -220,6 +233,7 @@ export default function Home() {
       );
 
       return;
+
     }
 
 
@@ -230,6 +244,7 @@ export default function Home() {
       );
 
       return;
+
     }
 
 
@@ -278,6 +293,7 @@ export default function Home() {
       );
 
       return;
+
     }
 
 
@@ -342,12 +358,16 @@ export default function Home() {
       );
 
       return;
+
     }
 
 
     setProfile(
       data
     );
+
+
+    await loadMarketListings();
 
   }
 
@@ -376,6 +396,7 @@ export default function Home() {
       );
 
       return;
+
     }
 
 
@@ -419,6 +440,7 @@ export default function Home() {
       );
 
       return;
+
     }
 
 
@@ -459,6 +481,7 @@ export default function Home() {
       );
 
       return;
+
     }
 
 
@@ -502,6 +525,7 @@ export default function Home() {
       );
 
       return;
+
     }
 
 
@@ -512,16 +536,292 @@ export default function Home() {
   }
 
 
+  async function loadMarketListings() {
+
+    const {
+      data,
+      error,
+    } =
+      await supabase
+        .from(
+          "market_listings"
+        )
+        .select("*")
+        .eq(
+          "status",
+          "active"
+        )
+        .order(
+          "created_at",
+          {
+            ascending: false,
+          }
+        );
+
+
+    if (error) {
+
+      console.error(
+        "Market listings error:",
+        error
+      );
+
+      return;
+
+    }
+
+
+    if (
+      !data ||
+      data.length === 0
+    ) {
+
+      setMarketListings(
+        []
+      );
+
+      return;
+
+    }
+
+
+    const userIds = [
+
+      ...new Set(
+
+        data.map(
+          (listing) =>
+            listing.user_id
+        )
+
+      ),
+
+    ];
+
+
+    const {
+      data: profiles,
+      error: profileError,
+    } =
+      await supabase
+        .from(
+          "profiles"
+        )
+        .select(
+          "id, display_name, avatar_emoji, reputation_score, ratings_count, completed_trades"
+        )
+        .in(
+          "id",
+          userIds
+        );
+
+
+    if (profileError) {
+
+      console.error(
+        "Market profile error:",
+        profileError
+      );
+
+    }
+
+
+    const joined =
+
+      data.map(
+        (listing) => ({
+
+          ...listing,
+
+          profile:
+
+            profiles?.find(
+              (profile) =>
+                profile.id ===
+                listing.user_id
+            )
+
+            ??
+
+            null,
+
+        })
+      );
+
+
+    setMarketListings(
+      joined
+    );
+
+  }
+
+
+  async function createMarketListing(
+    input: {
+      speciesId: string;
+      quantity: number;
+      lookingFor: string;
+      areaLabel: string;
+      travelRadiusKm: number;
+    }
+  ) {
+
+    if (!user) {
+      return;
+    }
+
+
+    const inventoryItem =
+      inventory.find(
+        (item) =>
+          item.species_id ===
+          input.speciesId
+      );
+
+
+    if (
+      !inventoryItem ||
+      inventoryItem.quantity <
+      input.quantity
+    ) {
+
+      alert(
+        "You do not have enough of that item."
+      );
+
+      return;
+
+    }
+
+
+    const {
+      error,
+    } =
+      await supabase
+        .from(
+          "market_listings"
+        )
+        .insert({
+
+          user_id:
+            user.id,
+
+          species_id:
+            input.speciesId,
+
+          quantity:
+            input.quantity,
+
+          looking_for:
+            input.lookingFor,
+
+          area_label:
+            input.areaLabel,
+
+          travel_radius_km:
+            input.travelRadiusKm,
+
+          status:
+            "active",
+
+        });
+
+
+    if (error) {
+
+      console.error(
+        "Create listing error:",
+        error
+      );
+
+      alert(
+        "Could not create listing."
+      );
+
+      return;
+
+    }
+
+
+    await loadMarketListings();
+
+  }
+
+
+  async function deleteMarketListing(
+    listingId: number
+  ) {
+
+    if (!user) {
+      return;
+    }
+
+
+    const confirmed =
+      window.confirm(
+        "Remove this listing from the market?"
+      );
+
+
+    if (!confirmed) {
+      return;
+    }
+
+
+    const {
+      error,
+    } =
+      await supabase
+        .from(
+          "market_listings"
+        )
+        .delete()
+        .eq(
+          "id",
+          listingId
+        )
+        .eq(
+          "user_id",
+          user.id
+        );
+
+
+    if (error) {
+
+      console.error(
+        "Delete listing error:",
+        error
+      );
+
+      alert(
+        "Could not remove listing."
+      );
+
+      return;
+
+    }
+
+
+    setMarketListings(
+      (current) =>
+        current.filter(
+          (listing) =>
+            listing.id !==
+            listingId
+        )
+    );
+
+  }
+
+
   function getSpecies(
     plant: Plant
   ) {
 
     return species.find(
-
       (item) =>
         item.id ===
         plant.species_id
-
     );
 
   }
@@ -532,11 +832,9 @@ export default function Home() {
   ) {
 
     return species.find(
-
       (item) =>
         item.id ===
         speciesId
-
     );
 
   }
@@ -627,7 +925,6 @@ export default function Home() {
 
 
     const days =
-
       daysSinceWatered(
         plant
       );
@@ -782,6 +1079,7 @@ export default function Home() {
     ) {
 
       return;
+
     }
 
 
@@ -826,6 +1124,7 @@ export default function Home() {
       );
 
       return;
+
     }
 
 
@@ -854,11 +1153,9 @@ export default function Home() {
 
     const existing =
       inventory.find(
-
         (item) =>
           item.species_id ===
           speciesId
-
       );
 
 
@@ -905,6 +1202,7 @@ export default function Home() {
         );
 
         return false;
+
       }
 
 
@@ -962,6 +1260,7 @@ export default function Home() {
       );
 
       return false;
+
     }
 
 
@@ -1030,6 +1329,7 @@ export default function Home() {
       );
 
       return false;
+
     }
 
 
@@ -1512,7 +1812,6 @@ export default function Home() {
 
     await supabase.auth.signOut();
 
-
     router.push(
       "/login"
     );
@@ -1524,7 +1823,10 @@ export default function Home() {
 
     harvestEvents.reduce(
 
-      (total, event) =>
+      (
+        total,
+        event
+      ) =>
 
         total
 
@@ -1552,7 +1854,10 @@ export default function Home() {
 
     harvestEvents.reduce(
 
-      (total, event) =>
+      (
+        total,
+        event
+      ) =>
 
         total
 
@@ -1660,6 +1965,8 @@ export default function Home() {
 
       <div className="mx-auto max-w-6xl px-4 py-6">
 
+
+        {/* BACKYARD */}
 
         {screen ===
         "backyard" && (
@@ -1936,6 +2243,8 @@ export default function Home() {
             )}
 
 
+            {/* INVENTORY */}
+
             <section className="mt-7">
 
 
@@ -2003,7 +2312,9 @@ export default function Home() {
 
 
                   {inventory.map(
-                    (item) => {
+                    (
+                      item
+                    ) => {
 
 
                       const itemSpecies =
@@ -2081,6 +2392,40 @@ export default function Home() {
         )}
 
 
+        {/* MARKET */}
+
+        {screen ===
+          "market" &&
+          user && (
+
+
+          <MarketPanel
+            currentUserId={
+              user.id
+            }
+            inventory={
+              inventory
+            }
+            species={
+              species
+            }
+            listings={
+              marketListings
+            }
+            onCreateListing={
+              createMarketListing
+            }
+            onDeleteListing={
+              deleteMarketListing
+            }
+          />
+
+
+        )}
+
+
+        {/* PROFILE */}
+
         {screen ===
           "profile" &&
           profile &&
@@ -2115,44 +2460,10 @@ export default function Home() {
         )}
 
 
-        {screen ===
-        "market" && (
-
-
-          <section className="rounded-[32px] bg-white p-8 text-center shadow">
-
-
-            <div className="text-7xl">
-
-              🏪
-
-            </div>
-
-
-            <h2 className="mt-4 text-3xl font-black">
-
-              Local Market
-
-            </h2>
-
-
-            <p className="mx-auto mt-3 max-w-md text-gray-500">
-
-              This is what we build next: nearby gardeners, trade listings, travel radius and reputation.
-
-            </p>
-
-
-          </section>
-
-
-        )}
-
-
       </div>
 
 
-      {/* BOTTOM MOBILE NAV */}
+      {/* MOBILE NAV */}
 
       <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-white/95 shadow-2xl backdrop-blur">
 
@@ -2168,10 +2479,13 @@ export default function Home() {
             }
             className={`p-4 text-center ${
               screen === "backyard"
+
                 ? "bg-green-50 text-green-800"
+
                 : "text-gray-500"
             }`}
           >
+
 
             <div className="text-2xl">
 
@@ -2179,27 +2493,36 @@ export default function Home() {
 
             </div>
 
+
             <p className="text-xs font-bold">
 
               Backyard
 
             </p>
 
+
           </button>
 
 
           <button
-            onClick={() =>
+            onClick={() => {
+
               setScreen(
                 "market"
-              )
-            }
+              );
+
+              loadMarketListings();
+
+            }}
             className={`p-4 text-center ${
               screen === "market"
+
                 ? "bg-green-50 text-green-800"
+
                 : "text-gray-500"
             }`}
           >
+
 
             <div className="text-2xl">
 
@@ -2207,11 +2530,13 @@ export default function Home() {
 
             </div>
 
+
             <p className="text-xs font-bold">
 
               Market
 
             </p>
+
 
           </button>
 
@@ -2224,10 +2549,13 @@ export default function Home() {
             }
             className={`p-4 text-center ${
               screen === "profile"
+
                 ? "bg-green-50 text-green-800"
+
                 : "text-gray-500"
             }`}
           >
+
 
             <div className="text-2xl">
 
@@ -2240,11 +2568,13 @@ export default function Home() {
 
             </div>
 
+
             <p className="text-xs font-bold">
 
               Profile
 
             </p>
+
 
           </button>
 
@@ -2255,7 +2585,7 @@ export default function Home() {
       </nav>
 
 
-      {/* ADD PLANT */}
+      {/* ADD PLANT MODAL */}
 
       {showAddPlant && (
 

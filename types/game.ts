@@ -66,3 +66,39 @@ export type Species = {
   
     updated_at: string;
   };
+  
+  export type MarketListing = {
+    id: number;
+  
+    user_id: string;
+  
+    species_id: string;
+  
+    quantity: number;
+  
+    looking_for: string;
+  
+    area_label: string;
+  
+    travel_radius_km: number;
+  
+    status:
+      | "active"
+      | "paused"
+      | "completed";
+  
+    created_at: string;
+  
+    updated_at: string;
+  };
+  
+  export type MarketListingWithProfile =
+    MarketListing & {
+      profile?: {
+        display_name: string;
+        avatar_emoji: string;
+        reputation_score: number;
+        ratings_count: number;
+        completed_trades: number;
+      } | null;
+    };
