@@ -44,3 +44,25 @@ export type Species = {
     xp_earned: number;
     created_at: string;
   };
+  
+  export type Profile = {
+    id: string;
+  
+    display_name: string;
+  
+    avatar_emoji: string;
+  
+    bio: string;
+  
+    reputation_score: number;
+  
+    completed_trades: number;
+  
+    ratings_count: number;
+  
+    rating_total: number;
+  
+    created_at: string;
+  
+    updated_at: string;
+  };

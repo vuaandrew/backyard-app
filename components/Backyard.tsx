@@ -1,4 +1,4 @@
-import PlantSprite from "@/components/PlantSprite";
+import PlantSprite from "./PlantSprite";
 import type { Plant } from "@/types/game";
 
 type Props = {

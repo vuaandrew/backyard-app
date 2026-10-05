@@ -15,6 +15,8 @@ import type {
 
 import Backyard from "@/components/Backyard";
 
+import ProfilePanel from "@/components/ProfilePanel";
+
 import {
   supabase,
 } from "@/lib/supabase";
@@ -23,8 +25,15 @@ import type {
   HarvestEvent,
   InventoryItem,
   Plant,
+  Profile,
   Species,
 } from "@/types/game";
+
+
+type Screen =
+  | "backyard"
+  | "market"
+  | "profile";
 
 
 export default function Home() {
@@ -71,10 +80,28 @@ export default function Home() {
 
 
   const [
+    profile,
+    setProfile,
+  ] =
+    useState<Profile | null>(
+      null
+    );
+
+
+  const [
     loading,
     setLoading,
   ] =
     useState(true);
+
+
+  const [
+    screen,
+    setScreen,
+  ] =
+    useState<Screen>(
+      "backyard"
+    );
 
 
   const [
@@ -134,6 +161,11 @@ export default function Home() {
     );
 
 
+    await ensureProfile(
+      user
+    );
+
+
     await Promise.all([
 
       loadSpecies(),
@@ -155,6 +187,166 @@ export default function Home() {
 
     setLoading(
       false
+    );
+
+  }
+
+
+  async function ensureProfile(
+    currentUser: User
+  ) {
+
+    const {
+      data,
+      error,
+    } =
+      await supabase
+        .from(
+          "profiles"
+        )
+        .select("*")
+        .eq(
+          "id",
+          currentUser.id
+        )
+        .maybeSingle();
+
+
+    if (error) {
+
+      console.error(
+        "Profile load error:",
+        error
+      );
+
+      return;
+    }
+
+
+    if (data) {
+
+      setProfile(
+        data
+      );
+
+      return;
+    }
+
+
+    const defaultName =
+
+      currentUser.email
+        ?.split("@")[0]
+
+      ??
+
+      "Gardener";
+
+
+    const {
+      data: newProfile,
+      error: insertError,
+    } =
+      await supabase
+        .from(
+          "profiles"
+        )
+        .insert({
+
+          id:
+            currentUser.id,
+
+          display_name:
+            defaultName,
+
+          avatar_emoji:
+            "🧑‍🌾",
+
+          bio:
+            "",
+
+        })
+        .select()
+        .single();
+
+
+    if (insertError) {
+
+      console.error(
+        "Profile creation error:",
+        insertError
+      );
+
+      return;
+    }
+
+
+    setProfile(
+      newProfile
+    );
+
+  }
+
+
+  async function saveProfile(
+    displayName: string,
+    avatarEmoji: string,
+    bio: string
+  ) {
+
+    if (!user) {
+      return;
+    }
+
+
+    const {
+      data,
+      error,
+    } =
+      await supabase
+        .from(
+          "profiles"
+        )
+        .update({
+
+          display_name:
+            displayName,
+
+          avatar_emoji:
+            avatarEmoji,
+
+          bio,
+
+          updated_at:
+            new Date()
+              .toISOString(),
+
+        })
+        .eq(
+          "id",
+          user.id
+        )
+        .select()
+        .single();
+
+
+    if (error) {
+
+      console.error(
+        "Profile save error:",
+        error
+      );
+
+      alert(
+        "Could not save profile."
+      );
+
+      return;
+    }
+
+
+    setProfile(
+      data
     );
 
   }
@@ -1379,17 +1571,26 @@ export default function Home() {
 
       <main className="flex min-h-screen items-center justify-center bg-green-100">
 
+
         <div className="text-center">
 
+
           <div className="text-7xl">
+
             🌱
+
           </div>
 
+
           <p className="mt-4 font-bold">
+
             Entering your backyard...
+
           </p>
 
+
         </div>
+
 
       </main>
 
@@ -1400,25 +1601,33 @@ export default function Home() {
 
   return (
 
-    <main className="min-h-screen bg-[#e9f2df] text-[#203020]">
+    <main className="min-h-screen bg-[#e9f2df] pb-24 text-[#203020]">
 
 
-      {/* GAME HUD */}
+      {/* HUD */}
 
       <header className="sticky top-0 z-40 border-b border-green-900/10 bg-white/95 shadow-sm backdrop-blur">
+
 
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
 
 
           <div>
 
+
             <p className="text-xs font-bold uppercase tracking-widest text-green-700">
+
               Backyard
+
             </p>
 
+
             <h1 className="text-xl font-black">
+
               🌿 My Garden
+
             </h1>
+
 
           </div>
 
@@ -1427,12 +1636,16 @@ export default function Home() {
 
 
             <div className="rounded-xl bg-yellow-100 px-3 py-2 font-bold">
+
               ⭐ {totalXP} XP
+
             </div>
 
 
             <div className="rounded-xl bg-green-100 px-3 py-2 font-bold">
+
               LVL {gardenLevel}
+
             </div>
 
 
@@ -1440,6 +1653,7 @@ export default function Home() {
 
 
         </div>
+
 
       </header>
 
@@ -1447,212 +1661,254 @@ export default function Home() {
       <div className="mx-auto max-w-6xl px-4 py-6">
 
 
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        {screen ===
+        "backyard" && (
 
 
-          <div>
-
-            <p className="font-bold">
-              Welcome home 👋
-            </p>
-
-            <p className="text-xs text-gray-500">
-              {user?.email}
-            </p>
-
-          </div>
+          <>
 
 
-          <div className="flex gap-2">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
 
 
-            <button
-              onClick={() =>
-                setShowAddPlant(
-                  true
-                )
-              }
-              className="rounded-xl bg-green-700 px-4 py-3 font-bold text-white shadow"
-            >
-              🌱 Add Plant
-            </button>
+              <div>
 
 
-            <button
-              onClick={
-                signOut
-              }
-              className="rounded-xl border bg-white px-4 py-3 font-semibold"
-            >
-              Log out
-            </button>
+                <p className="font-bold">
+
+                  Welcome home{" "}
+
+                  {
+                    profile
+                      ?.avatar_emoji
+                    ??
+                    "🧑‍🌾"
+                  }
+
+                </p>
 
 
-          </div>
+                <p className="text-xs text-gray-500">
 
+                  {
+                    profile
+                      ?.display_name
+                    ??
+                    user?.email
+                  }
 
-        </div>
-
-
-        <Backyard
-
-          plants={
-            plants
-          }
-
-          selectedPlantId={
-            selectedPlant?.id
-            ??
-            null
-          }
-
-          getHealth={
-            getPlantHealth
-          }
-
-          isReady={
-            isReadyToHarvest
-          }
-
-          onSelectPlant={
-            setSelectedPlant
-          }
-
-        />
-
-
-        {/* SELECTED PLANT ACTION PANEL */}
-
-        {selectedPlant && (
-
-          <section className="mt-5 rounded-3xl bg-white p-5 shadow">
-
-
-            <div className="flex items-start justify-between">
-
-
-              <div className="flex items-center gap-4">
-
-
-                <div className="text-6xl">
-
-                  {getPlantHealth(
-                    selectedPlant
-                  ) === "Dead"
-
-                    ? "🥀"
-
-                    : selectedPlant
-                        .emoji}
-
-                </div>
-
-
-                <div>
-
-                  <h2 className="text-2xl font-black">
-                    {
-                      selectedPlant.name
-                    }
-                  </h2>
-
-                  <p className="text-sm text-gray-500">
-                    {
-                      selectedPlant.stage
-                    }
-                  </p>
-
-                  <p className="mt-1 text-sm font-semibold text-green-700">
-                    {
-                      getPlantHealth(
-                        selectedPlant
-                      )
-                    }
-                  </p>
-
-                </div>
+                </p>
 
 
               </div>
 
 
-              <button
-                onClick={() =>
-                  setSelectedPlant(
-                    null
-                  )
-                }
-              >
-                ✕
-              </button>
+              <div className="flex gap-2">
+
+
+                <button
+                  onClick={() =>
+                    setShowAddPlant(
+                      true
+                    )
+                  }
+                  className="rounded-xl bg-green-700 px-4 py-3 font-bold text-white shadow"
+                >
+
+                  🌱 Add Plant
+
+                </button>
+
+
+                <button
+                  onClick={
+                    signOut
+                  }
+                  className="rounded-xl border bg-white px-4 py-3 font-semibold"
+                >
+
+                  Log out
+
+                </button>
+
+
+              </div>
 
 
             </div>
 
 
-            {getPlantHealth(
-              selectedPlant
-            ) !== "Dead" && (
+            <Backyard
+              plants={
+                plants
+              }
+              selectedPlantId={
+                selectedPlant?.id
+                ??
+                null
+              }
+              getHealth={
+                getPlantHealth
+              }
+              isReady={
+                isReadyToHarvest
+              }
+              onSelectPlant={
+                setSelectedPlant
+              }
+            />
 
 
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            {selectedPlant && (
 
 
-                <button
-                  onClick={() =>
-                    waterPlant(
-                      selectedPlant
-                    )
-                  }
-                  disabled={
-                    wateredToday(
-                      selectedPlant
-                    )
-                  }
-                  className="rounded-xl bg-blue-100 px-4 py-4 font-bold text-blue-800 disabled:bg-green-100 disabled:text-green-700"
-                >
-
-                  {wateredToday(
-                    selectedPlant
-                  )
-
-                    ? "✓ Watered today"
-
-                    : "💧 Water"}
-
-                </button>
+              <section className="mt-5 rounded-3xl bg-white p-5 shadow">
 
 
-                {isReadyToHarvest(
-                  selectedPlant
-                ) ? (
+                <div className="flex items-start justify-between">
+
+
+                  <div className="flex items-center gap-4">
+
+
+                    <div className="text-6xl">
+
+                      {getPlantHealth(
+                        selectedPlant
+                      ) === "Dead"
+
+                        ? "🥀"
+
+                        : selectedPlant
+                            .emoji}
+
+                    </div>
+
+
+                    <div>
+
+
+                      <h2 className="text-2xl font-black">
+
+                        {
+                          selectedPlant.name
+                        }
+
+                      </h2>
+
+
+                      <p className="text-sm text-gray-500">
+
+                        {
+                          selectedPlant.stage
+                        }
+
+                      </p>
+
+
+                      <p className="mt-1 text-sm font-semibold text-green-700">
+
+                        {
+                          getPlantHealth(
+                            selectedPlant
+                          )
+                        }
+
+                      </p>
+
+
+                    </div>
+
+
+                  </div>
 
 
                   <button
                     onClick={() =>
-                      harvestPlant(
-                        selectedPlant
+                      setSelectedPlant(
+                        null
                       )
                     }
-                    className="rounded-xl bg-orange-500 px-4 py-4 font-black text-white"
                   >
-                    🧺 Harvest
+
+                    ✕
+
                   </button>
 
 
-                ) : (
+                </div>
 
 
-                  <div className="flex items-center justify-center rounded-xl bg-gray-100 px-4 py-4 text-sm font-semibold">
+                {getPlantHealth(
+                  selectedPlant
+                ) !== "Dead" && (
 
-                    ⏳{" "}
 
-                    {daysUntilHarvest(
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+
+
+                    <button
+                      onClick={() =>
+                        waterPlant(
+                          selectedPlant
+                        )
+                      }
+                      disabled={
+                        wateredToday(
+                          selectedPlant
+                        )
+                      }
+                      className="rounded-xl bg-blue-100 px-4 py-4 font-bold text-blue-800 disabled:bg-green-100 disabled:text-green-700"
+                    >
+
+                      {wateredToday(
+                        selectedPlant
+                      )
+
+                        ? "✓ Watered today"
+
+                        : "💧 Water"}
+
+                    </button>
+
+
+                    {isReadyToHarvest(
                       selectedPlant
-                    ) ??
-                      "?"}
+                    ) ? (
 
-                    {" "}day(s)
+
+                      <button
+                        onClick={() =>
+                          harvestPlant(
+                            selectedPlant
+                          )
+                        }
+                        className="rounded-xl bg-orange-500 px-4 py-4 font-black text-white"
+                      >
+
+                        🧺 Harvest
+
+                      </button>
+
+
+                    ) : (
+
+
+                      <div className="flex items-center justify-center rounded-xl bg-gray-100 px-4 py-4 text-sm font-semibold">
+
+                        ⏳{" "}
+
+                        {daysUntilHarvest(
+                          selectedPlant
+                        ) ?? "?"}
+
+                        {" "}day(s)
+
+                      </div>
+
+
+                    )}
+
 
                   </div>
 
@@ -1660,205 +1916,346 @@ export default function Home() {
                 )}
 
 
-              </div>
+                <button
+                  onClick={() =>
+                    removePlant(
+                      selectedPlant
+                    )
+                  }
+                  className="mt-4 text-xs font-semibold text-red-500"
+                >
+
+                  Remove plant
+
+                </button>
+
+
+              </section>
 
 
             )}
 
 
-            <button
-              onClick={() =>
-                removePlant(
-                  selectedPlant
-                )
-              }
-              className="mt-4 text-xs font-semibold text-red-500"
-            >
-              Remove plant
-            </button>
+            <section className="mt-7">
 
 
-          </section>
+              <div className="flex items-end justify-between">
+
+
+                <div>
+
+
+                  <p className="text-xs font-bold uppercase tracking-widest text-green-700">
+
+                    Inventory
+
+                  </p>
+
+
+                  <h2 className="text-2xl font-black">
+
+                    🧺 Harvest Basket
+
+                  </h2>
+
+
+                </div>
+
+
+                <p className="text-sm font-semibold text-gray-500">
+
+                  {totalHarvested} harvested
+
+                </p>
+
+
+              </div>
+
+
+              {inventory.length ===
+              0 ? (
+
+
+                <div className="mt-3 rounded-3xl border-2 border-dashed border-green-300 bg-white/70 p-8 text-center">
+
+
+                  <div className="text-5xl">
+
+                    🧺
+
+                  </div>
+
+
+                  <p className="mt-2 font-semibold">
+
+                    Basket empty
+
+                  </p>
+
+
+                </div>
+
+
+              ) : (
+
+
+                <div className="mt-3 flex gap-3 overflow-x-auto pb-2">
+
+
+                  {inventory.map(
+                    (item) => {
+
+
+                      const itemSpecies =
+                        getSpeciesById(
+                          item.species_id
+                        );
+
+
+                      return (
+
+
+                        <div
+                          key={
+                            item.id
+                          }
+                          className="min-w-[130px] rounded-2xl bg-white p-4 text-center shadow"
+                        >
+
+
+                          <div className="text-4xl">
+
+                            {
+                              itemSpecies
+                                ?.emoji
+                              ??
+                              "🌱"
+                            }
+
+                          </div>
+
+
+                          <p className="mt-2 text-sm font-bold">
+
+                            {
+                              itemSpecies
+                                ?.common_name
+                              ??
+                              item.species_id
+                            }
+
+                          </p>
+
+
+                          <p className="text-lg font-black text-green-700">
+
+                            ×
+                            {
+                              item.quantity
+                            }
+
+                          </p>
+
+
+                        </div>
+
+
+                      );
+
+                    }
+                  )}
+
+
+                </div>
+
+
+              )}
+
+
+            </section>
+
+
+          </>
+
 
         )}
 
 
-        {/* INVENTORY */}
-
-        <section className="mt-7">
-
-
-          <div className="flex items-end justify-between">
+        {screen ===
+          "profile" &&
+          profile &&
+          user && (
 
 
-            <div>
-
-              <p className="text-xs font-bold uppercase tracking-widest text-green-700">
-                Inventory
-              </p>
-
-              <h2 className="text-2xl font-black">
-                🧺 Harvest Basket
-              </h2>
-
-            </div>
-
-
-            <p className="text-sm font-semibold text-gray-500">
-              {totalHarvested} harvested
-            </p>
-
-
-          </div>
-
-
-          {inventory.length ===
-          0 ? (
-
-
-            <div className="mt-3 rounded-3xl border-2 border-dashed border-green-300 bg-white/70 p-8 text-center">
-
-              <div className="text-5xl">
-                🧺
-              </div>
-
-              <p className="mt-2 font-semibold">
-                Basket empty
-              </p>
-
-            </div>
+          <ProfilePanel
+            profile={
+              profile
+            }
+            email={
+              user.email ?? ""
+            }
+            level={
+              gardenLevel
+            }
+            xp={
+              totalXP
+            }
+            harvested={
+              totalHarvested
+            }
+            plantCount={
+              plants.length
+            }
+            onSave={
+              saveProfile
+            }
+          />
 
 
-          ) : (
+        )}
 
 
-            <div className="mt-3 flex gap-3 overflow-x-auto pb-2">
+        {screen ===
+        "market" && (
 
 
-              {inventory.map(
-                (item) => {
+          <section className="rounded-[32px] bg-white p-8 text-center shadow">
 
 
-                  const itemSpecies =
-                    getSpeciesById(
-                      item.species_id
-                    );
+            <div className="text-7xl">
 
-
-                  return (
-
-                    <div
-                      key={
-                        item.id
-                      }
-                      className="min-w-[130px] rounded-2xl bg-white p-4 text-center shadow"
-                    >
-
-                      <div className="text-4xl">
-
-                        {
-                          itemSpecies
-                            ?.emoji
-                          ??
-                          "🌱"
-                        }
-
-                      </div>
-
-                      <p className="mt-2 text-sm font-bold">
-
-                        {
-                          itemSpecies
-                            ?.common_name
-                          ??
-                          item.species_id
-                        }
-
-                      </p>
-
-                      <p className="text-lg font-black text-green-700">
-
-                        ×
-                        {
-                          item.quantity
-                        }
-
-                      </p>
-
-                    </div>
-
-                  );
-
-                }
-              )}
-
-
-            </div>
-
-
-          )}
-
-
-        </section>
-
-
-        {/* FUTURE GAME NAVIGATION */}
-
-        <section className="mt-7 grid grid-cols-3 gap-3">
-
-
-          <button className="rounded-2xl bg-white p-4 text-center shadow">
-
-            <div className="text-3xl">
-              🏡
-            </div>
-
-            <p className="mt-1 text-xs font-bold">
-              Backyard
-            </p>
-
-          </button>
-
-
-          <button
-            disabled
-            className="rounded-2xl bg-white/60 p-4 text-center opacity-60 shadow"
-          >
-
-            <div className="text-3xl">
               🏪
+
             </div>
 
-            <p className="mt-1 text-xs font-bold">
+
+            <h2 className="mt-4 text-3xl font-black">
+
               Local Market
+
+            </h2>
+
+
+            <p className="mx-auto mt-3 max-w-md text-gray-500">
+
+              This is what we build next: nearby gardeners, trade listings, travel radius and reputation.
+
             </p>
 
-          </button>
+
+          </section>
 
 
-          <button
-            disabled
-            className="rounded-2xl bg-white/60 p-4 text-center opacity-60 shadow"
-          >
-
-            <div className="text-3xl">
-              👤
-            </div>
-
-            <p className="mt-1 text-xs font-bold">
-              Profile
-            </p>
-
-          </button>
-
-
-        </section>
+        )}
 
 
       </div>
 
 
-      {/* ADD PLANT MODAL */}
+      {/* BOTTOM MOBILE NAV */}
+
+      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-white/95 shadow-2xl backdrop-blur">
+
+
+        <div className="mx-auto grid max-w-2xl grid-cols-3">
+
+
+          <button
+            onClick={() =>
+              setScreen(
+                "backyard"
+              )
+            }
+            className={`p-4 text-center ${
+              screen === "backyard"
+                ? "bg-green-50 text-green-800"
+                : "text-gray-500"
+            }`}
+          >
+
+            <div className="text-2xl">
+
+              🏡
+
+            </div>
+
+            <p className="text-xs font-bold">
+
+              Backyard
+
+            </p>
+
+          </button>
+
+
+          <button
+            onClick={() =>
+              setScreen(
+                "market"
+              )
+            }
+            className={`p-4 text-center ${
+              screen === "market"
+                ? "bg-green-50 text-green-800"
+                : "text-gray-500"
+            }`}
+          >
+
+            <div className="text-2xl">
+
+              🏪
+
+            </div>
+
+            <p className="text-xs font-bold">
+
+              Market
+
+            </p>
+
+          </button>
+
+
+          <button
+            onClick={() =>
+              setScreen(
+                "profile"
+              )
+            }
+            className={`p-4 text-center ${
+              screen === "profile"
+                ? "bg-green-50 text-green-800"
+                : "text-gray-500"
+            }`}
+          >
+
+            <div className="text-2xl">
+
+              {
+                profile
+                  ?.avatar_emoji
+                ??
+                "👤"
+              }
+
+            </div>
+
+            <p className="text-xs font-bold">
+
+              Profile
+
+            </p>
+
+          </button>
+
+
+        </div>
+
+
+      </nav>
+
+
+      {/* ADD PLANT */}
 
       {showAddPlant && (
 
@@ -1874,13 +2271,20 @@ export default function Home() {
 
               <div>
 
+
                 <h2 className="text-2xl font-black">
+
                   Add Plant
+
                 </h2>
 
+
                 <p className="text-sm text-gray-500">
+
                   Choose what you planted.
+
                 </p>
+
 
               </div>
 
@@ -1893,7 +2297,9 @@ export default function Home() {
                 }
                 className="text-xl"
               >
+
                 ✕
+
               </button>
 
 
@@ -1921,21 +2327,31 @@ export default function Home() {
                     className="rounded-2xl border border-green-200 bg-green-50 p-5 transition hover:bg-green-100"
                   >
 
+
                     <div className="text-5xl">
+
                       {
                         plantSpecies.emoji
                       }
+
                     </div>
 
+
                     <p className="mt-2 font-bold">
+
                       {
                         plantSpecies.common_name
                       }
+
                     </p>
 
+
                     <p className="mt-1 text-xs text-gray-500">
+
                       Add seedling
+
                     </p>
+
 
                   </button>
 
@@ -1949,13 +2365,20 @@ export default function Home() {
 
             <div className="mt-5 rounded-2xl bg-gray-100 p-4">
 
+
               <p className="text-sm font-semibold">
+
                 📷 AI scanning coming later
+
               </p>
 
+
               <p className="mt-1 text-xs text-gray-500">
-                We are building the whole game first.
+
+                We are finishing the core game first.
+
               </p>
+
 
             </div>
 
